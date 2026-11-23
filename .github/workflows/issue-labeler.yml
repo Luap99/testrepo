@@ -1,0 +1,59 @@
+name: "Issue Labeler"
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  triage:
+    permissions:
+      issues: write  # to add labels
+    runs-on: ubuntu-latest
+    env:
+      NUMBER: ${{ github.event.issue.number }}
+      BODY: ${{ github.event.issue.body }}
+      GH_REPO: ${{ github.repository }}
+      GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    steps:
+    - name: add labels
+      run: |
+        add_labels=()
+        declare -A labels=(
+          # info prints OsArch: ...
+          # version prints OS/Arch: ...
+          ["windows"]='O[Ss]/?Arch:\s*windows'
+          ["macos"]='O[Ss]/?Arch:\s*darwin'
+          ["remote"]='serviceIsRemote:\strue'
+          ["machine"]='variant:\spodman-machine-os'
+
+          # Issue Templates set them by default but when users (or AI rather) use the
+          # github API to create the issue the labels are not added even when they are
+          # smart enough to follow the template text. So match the titles and add them
+          # to avoid manual work for it.
+          ["kind/bug"]='Issue Description'
+          ["kind/feature"]='Feature request description'
+        )
+        for label in "${!labels[@]}"; do
+          if grep -Eq "${labels[$label]}" <<<"$BODY"; then
+            add_labels+=("$label")
+          fi
+        done
+        echo "Adding labels '${add_labels[@]}' to issue #$NUMBER"
+        gh issue edit "$NUMBER" --add-label "$(IFS=,; printf '%s' "${add_labels[*]}")"
+
+        # If it is a bug check the user added actual podman info output by looking for the "Version:" part.
+        if [[ "${add_labels[*]}" =~ kind/bug ]] && grep -Eq "[Vv]ersion:" <<<"$BODY"; then
+          comment_count=$(gh issue view "$NUMBER" --json comments --jq '.comments | length')
+          # Only add the comment at most once, because the action triggers on each edit ensure we wont spam the issue for no reason.
+          # In theory a user comment could create a false positive but given the action runs right away after first creation it should
+          # be fine in practice to avoid the need for more complex checks.
+          if [[ "$comment_count" -eq 0 ]]; then
+            gh issue comment "$NUMBER" --body 'It looks like you are trying to report a bug but did not include the `podman info` output.
+              Please edit the issue description to include the output from the system where you encounter the issue.
+              Maintainers require this information to properly triage issues.
+
+              If you cannot run the command or are not reporting a bug please ignore this message.'
+          fi
+        fi
