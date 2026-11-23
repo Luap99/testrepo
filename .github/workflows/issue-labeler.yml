@@ -16,6 +16,12 @@ jobs:
       BODY: ${{ github.event.issue.body }}
       GH_REPO: ${{ github.repository }}
       GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      COMMENT_MESSAGE: |
+        It looks like you are trying to report a bug but did not include the `podman info` output.
+        Please edit the issue description to include the output from the system where you encounter the issue.
+        Maintainers require this information to properly triage issues.
+
+        If you cannot run the command or are not reporting a bug please ignore this message.
     steps:
     - name: add labels
       run: |
@@ -50,10 +56,6 @@ jobs:
           # In theory a user comment could create a false positive but given the action runs right away after first creation it should
           # be fine in practice to avoid the need for more complex checks.
           if [[ "$comment_count" -eq 0 ]]; then
-            gh issue comment "$NUMBER" --body 'It looks like you are trying to report a bug but did not include the `podman info` output.
-              Please edit the issue description to include the output from the system where you encounter the issue.
-              Maintainers require this information to properly triage issues.
-
-              If you cannot run the command or are not reporting a bug please ignore this message.'
+            gh issue comment "$NUMBER" --body "$COMMENT_MESSAGE"
           fi
         fi
