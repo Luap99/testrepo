@@ -46,16 +46,19 @@ jobs:
             add_labels+=("$label")
           fi
         done
-        echo "Adding labels '${add_labels[@]}' to issue #$NUMBER"
-        gh issue edit "$NUMBER" --add-label "$(IFS=,; printf '%s' "${add_labels[*]}")"
+        if [[ "${#add_labels[@]}" -gt 0 ]]; then
+          echo "Adding labels '${add_labels[*]}' to issue #$NUMBER"
+          gh issue edit "$NUMBER" --add-label "$(IFS=,; printf '%s' "${add_labels[*]}")"
+        fi
 
         # If it is a bug check the user added actual podman info output by looking for the "Version:" part.
-        if [[ "${add_labels[*]}" =~ kind/bug ]] && grep -Eq "[Vv]ersion:" <<<"$BODY"; then
+        if [[ "${add_labels[*]}" =~ kind/bug ]] && ! grep -Eq "[Vv]ersion:" <<<"$BODY"; then
           comment_count=$(gh issue view "$NUMBER" --json comments --jq '.comments | length')
-          # Only add the comment at most once, because the action triggers on each edit ensure we wont spam the issue for no reason.
+          # Only add the comment at most once, because the action triggers on each edit ensure we won't spam the issue for no reason.
           # In theory a user comment could create a false positive but given the action runs right away after first creation it should
           # be fine in practice to avoid the need for more complex checks.
           if [[ "$comment_count" -eq 0 ]]; then
+            echo "Adding comment to issue #$NUMBER to ask for podman info"
             gh issue comment "$NUMBER" --body "$COMMENT_MESSAGE"
           fi
         fi
